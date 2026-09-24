@@ -1,6 +1,6 @@
 # METAMORPH - Development Memory
 
-## Current State: Full Pipeline Working (Phase 3+)
+## Current State: Full Pipeline + Auth Barrier Detection (Phase 3+)
 
 ### What's Done ✅
 
@@ -21,7 +21,7 @@
 - Repair Engine (`scanner/repair/`) - diff-based re-scan and regeneration
 - CLI: `probe`, `repair` commands
 
-**Phase 3+ Fixes: Full Pipeline Working**
+**Phase 3+ Fixes: Full Pipeline + Auth Barrier Detection**
 - Fixed DOM structure capture key sanitization (removed problematic regex)
 - Fixed StorageCapture async IIFE for IndexedDB
 - Fixed network/storage object serialization (dynamic objects -> proper dicts)
@@ -29,7 +29,23 @@
 - Added error handling for DOM capture (non-blocking, continues scan)
 - Scanner now completes end-to-end on fixture testbed
 - **Repair command working**: `metamorph repair` computes diff between scans
+- **Auth barrier detection**: Login, CAPTCHA, 2FA, email/phone verification, access denied
 - Fixed `output_dir` Path type, `compute_diff` with Dossier objects, `DossierDiff.to_dict()`
+
+### Auth Barrier Detection (NEW)
+- Enhanced `_is_login_page` with better detection (email + password, multiple languages)
+- Added `_detect_auth_barrier()` method detecting:
+  - **Login pages**: email + password fields, login forms/text
+  - **CAPTCHA**: reCAPTCHA, hCaptcha, Cloudflare, Turnstile, generic image captcha
+  - **2FA**: TOTP inputs (autocomplete=one-time-code), authenticator text, 6-digit code inputs
+  - **Email verification**: "verify email", "check inbox" patterns
+  - **Phone/SMS verification**: "verify phone", "SMS code" patterns
+  - **Access denied / rate limit**: "access denied", "blocked", "rate limit", "try again"
+  - **Cloudflare challenges**: "Just a moment", "Checking your browser"
+- Added `auth_barrier` field to `Screen` type (dict with all barrier flags)
+- Integrated into `_visit_screen` - captures barrier info per screen
+- Stops crawl on login pages, records barriers on other screens
+- Fixture testbed exposes stores immediately for scanner detection
 
 ### Fixture Testbed (`fixtures/testbed/`)
 - Baseline variant: Working messaging SPA with 4 conversations, 3 tabs (Direct/Groups/Channels)
@@ -97,7 +113,7 @@ python -m scanner.cli.main report ./dossier_test/dossier.json
 
 ### Git Status
 - Repo: https://github.com/GuiVicS/metamorph
-- Latest commit: `7629a11` - Fix repair command
+- Latest commit: `32fbe24` - Add auth barrier detection
 
 ### Next Steps
 1. **Test repair flow** with v2/v3 variants - run repair scan and verify diff detection
@@ -105,3 +121,4 @@ python -m scanner.cli.main report ./dossier_test/dossier.json
 3. **Run probe validation** - `python -m scanner.cli.main probe --ext ./extensions/testbed/dist --dossier ./dossier_test/dossier.json`
 4. **Improve fixture detection** - add webpack chunk detection, store detection for vanilla JS apps
 5. **GitHub Actions CI** - lint, typecheck, pytest, build extension
+6. **Test on real site** (with login) - verify auth barrier detection works end-to-end
