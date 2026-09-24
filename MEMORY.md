@@ -1,6 +1,6 @@
 # METAMORPH - Development Memory
 
-## Current State: Scanner End-to-End Working (Phase 3+)
+## Current State: Full Pipeline Working (Phase 3+)
 
 ### What's Done ✅
 
@@ -21,13 +21,15 @@
 - Repair Engine (`scanner/repair/`) - diff-based re-scan and regeneration
 - CLI: `probe`, `repair` commands
 
-**Phase 3+ Fixes (this commit): Scanner End-to-End Working**
-- Fixed DOM structure capture key sanitization (removed problematic regex causing "Unexpected token ']'")
+**Phase 3+ Fixes: Full Pipeline Working**
+- Fixed DOM structure capture key sanitization (removed problematic regex)
 - Fixed StorageCapture async IIFE for IndexedDB
 - Fixed network/storage object serialization (dynamic objects -> proper dicts)
 - Removed rich Progress bars (Windows cp1252 encoding issues)
 - Added error handling for DOM capture (non-blocking, continues scan)
 - Scanner now completes end-to-end on fixture testbed
+- **Repair command working**: `metamorph repair` computes diff between scans
+- Fixed `output_dir` Path type, `compute_diff` with Dossier objects, `DossierDiff.to_dict()`
 
 ### Fixture Testbed (`fixtures/testbed/`)
 - Baseline variant: Working messaging SPA with 4 conversations, 3 tabs (Direct/Groups/Channels)
@@ -35,8 +37,8 @@
 - Webpack-like module registration: `webpackChunktestbed_app` with shape-based exports
 - Internal API: `TestbedAPI` with `getConversations`, `getMessages`, `sendMessage`, `markAsRead`
 - WebSocket simulation: Incoming `MESSAGE_CREATE` events
-- Variant v2 (renamed-store): Different chunk global (`webpackChunktestbed_app_v2`), renamed exports (`getMessageRepository` vs `getMessageStore`), renamed methods (`fetchMessages` vs `getMessages`)
-- Variant v3 (moved-endpoint): Different chunk global (`webpackChunktestbed_app_v3`), same exports but internal API switched to GraphQL-style `/graphql` endpoint
+- Variant v2 (renamed-store): Different chunk global, renamed exports, renamed methods
+- Variant v3 (moved-endpoint): Different chunk global, GraphQL-style `/graphql` endpoint
 - Simple aiohttp server (`server.py`) serves static files
 
 ### Project Structure
@@ -95,7 +97,7 @@ python -m scanner.cli.main report ./dossier_test/dossier.json
 
 ### Git Status
 - Repo: https://github.com/GuiVicS/metamorph
-- Latest commit: `eea30b9` - Phase 3 fixes: Scanner end-to-end working
+- Latest commit: `7629a11` - Fix repair command
 
 ### Next Steps
 1. **Test repair flow** with v2/v3 variants - run repair scan and verify diff detection
