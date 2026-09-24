@@ -186,7 +186,7 @@ class StorageCapture:
     @staticmethod
     async def capture(page: Page) -> dict:
         script = """
-        () => {
+        async () => {
             const result = {
                 localStorage: {},
                 sessionStorage: {},

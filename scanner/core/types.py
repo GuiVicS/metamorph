@@ -250,9 +250,9 @@ class Dossier:
         if screen.runtime:
             d["runtime"] = screen.runtime.__dict__
         if screen.network:
-            d["network"] = screen.network.to_dict()
+            d["network"] = screen.network.to_dict() if hasattr(screen.network, 'to_dict') else screen.network.__dict__
         if screen.storage:
-            d["storage"] = screen.storage.to_dict()
+            d["storage"] = screen.storage.to_dict() if hasattr(screen.storage, 'to_dict') else screen.storage.__dict__
         if screen.dom:
             d["dom"] = asdict(screen.dom)
         d["behavioral"] = [b.__dict__ for b in screen.behavioral]

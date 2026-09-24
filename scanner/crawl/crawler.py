@@ -277,13 +277,25 @@ class Crawler:
             ))
 
         # Capture static surface
-        screen.static = await self._capture_static_surface(page)
+        try:
+            screen.static = await self._capture_static_surface(page)
+        except Exception as e:
+            print(f"Static surface capture failed: {e}")
+            screen.static = None
 
         # Capture runtime topology
-        screen.runtime = await self._capture_runtime_topology(page)
+        try:
+            screen.runtime = await self._capture_runtime_topology(page)
+        except Exception as e:
+            print(f"Runtime topology capture failed: {e}")
+            screen.runtime = None
 
         # Capture DOM structure
-        screen.dom = await self._capture_dom_structure(page)
+        try:
+            screen.dom = await self._capture_dom_structure(page)
+        except Exception as e:
+            print(f"DOM structure capture failed: {e}")
+            screen.dom = None
 
         return screen
 
@@ -411,7 +423,7 @@ class Crawler:
                 }
             }
             // Vite
-            if (window.__vite_plugin_react_preamble_installed__ || window.import.meta?.hot) {
+            if (window.__vite_plugin_react_preamble_installed__ || (window.import && window.import.meta?.hot)) {
                 bundler = bundler || 'Vite';
                 moduleSystem = moduleSystem || 'esm';
             }
@@ -677,7 +689,21 @@ class Crawler:
                 else if (el.hasAttribute('aria-label')) css = `[aria-label="${el.getAttribute('aria-label')}"]`;
 
                 if (css) {
-                    const key = css.replace(/[\[\]="']/g, '_').replace(/^_|_$/g, '');
+                    const key = (() => {
+  let k = '';
+  for (const ch of css) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch === '-' || ch === '_') {
+      k += ch;
+    } else {
+      k += '_';
+    }
+  }
+  // trim leading/trailing underscores
+  let start = 0, end = k.length;
+  while (start < end && k[start] === '_') start++;
+  while (end > start && k[end - 1] === '_') end--;
+  return k.slice(start, end);
+})();
                     selectors[key] = {
                         css: css,
                         fragility: 'low',

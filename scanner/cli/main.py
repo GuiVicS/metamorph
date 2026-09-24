@@ -16,11 +16,11 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from ..core.types import Dossier
-from .crawler import Crawler, CrawlConfig, URLNormalizer
-from .dimensions.network_storage import NetworkMonitor, StorageCapture
-from .redaction.engine import redact_dossier, verify_redaction
-from .probe.runner import ExtensionProbeValidator
-from .repair.engine import RepairEngine, compute_diff
+from ..crawl.crawler import Crawler, CrawlConfig, URLNormalizer
+from ..dimensions.network_storage import NetworkMonitor, StorageCapture
+from ..redaction.engine import redact_dossier, verify_redaction
+from ..probe.runner import ExtensionProbeValidator
+from ..repair.engine import RepairEngine, compute_diff
 
 console = Console()
 
@@ -132,60 +132,49 @@ async def _run_scan(
             page = browser.pages[0] if browser.pages else await browser.new_page()
             network_monitor.attach(page)
 
-            # Run crawl
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                TimeElapsedColumn(),
-                console=console,
-            ) as progress:
-                crawl_task = progress.add_task("Crawling...", total=max_screens)
+            # Run crawl (without Progress bar to avoid Windows encoding issues)
+            console.print("[cyan]Crawling...[/cyan]")
+            async with Crawler(browser, config, url) as crawler:
+                nav_graph = await crawler.crawl(url)
+                console.print(f"[green]Crawled {len(nav_graph.nodes)} screens[/green]")
 
-                async with Crawler(browser, config, url) as crawler:
-                    nav_graph = await crawler.crawl(url)
+                # Capture network & storage per screen
+                for screen_id, screen in nav_graph.nodes.items():
+                    console.print(f"[cyan]Capturing {screen_id}...[/cyan]")
 
-                    # Update progress
-                    progress.update(crawl_task, completed=len(nav_graph.nodes))
+                    # Navigate to screen for detailed capture
+                    await page.goto(screen.normalized_url, wait_until="networkidle", timeout=config.timeout_ms)
+                    await page.wait_for_timeout(config.settle_ms)
 
-                    # Capture network & storage per screen
-                    for screen_id, screen in nav_graph.nodes.items():
-                        progress.add_task(f"Capturing {screen_id}", total=3)
+                    # Network for this screen
+                    network_data = network_monitor.capture.to_catalogue()
+                    screen.network = type('obj', (object,), network_data)()
 
-                        # Navigate to screen for detailed capture
-                        await page.goto(screen.normalized_url, wait_until="networkidle", timeout=config.timeout_ms)
-                        await page.wait_for_timeout(config.settle_ms)
+                    # Storage
+                    storage_data = await StorageCapture.capture(page)
+                    screen.storage = type('obj', (object,), storage_data)()
 
-                        # Network for this screen
-                        network_data = network_monitor.capture.to_catalogue()
-                        screen.network = type('obj', (object,), network_data)()
-
-                        # Storage
-                        storage_data = await StorageCapture.capture(page)
-                        screen.storage = type('obj', (object,), storage_data)()
-
-                        # Save individual screen
-                        screen_file = screens_dir / f"{screen_id}.json"
-                        screen_file.write_text(json.dumps({
-                            "screen_id": screen.screen_id,
-                            "normalized_url": screen.normalized_url,
-                            "url_signature": screen.url_signature,
-                            "dom_signature": screen.dom_signature,
-                            "title": screen.title,
-                            "depth": screen.depth,
-                            "actions": screen.actions,
-                            "static": screen.static.__dict__ if screen.static else None,
-                            "runtime": screen.runtime.__dict__ if screen.runtime else None,
-                            "network": network_data,
-                            "storage": storage_data,
-                            "dom": {
-                                "stable_selectors": {k: v.to_dict() for k, v in screen.dom.stable_selectors.items()} if screen.dom else {},
-                                "input_targets": screen.dom.input_targets if screen.dom else [],
-                                "list_containers": screen.dom.list_containers if screen.dom else [],
-                                "action_buttons": screen.dom.action_buttons if screen.dom else [],
-                            } if screen.dom else None,
-                        }, indent=2, ensure_ascii=False))
-
-                        progress.update(crawl_task, advance=0)  # Just keep track
+                    # Save individual screen
+                    screen_file = screens_dir / f"{screen_id}.json"
+                    screen_file.write_text(json.dumps({
+                        "screen_id": screen.screen_id,
+                        "normalized_url": screen.normalized_url,
+                        "url_signature": screen.url_signature,
+                        "dom_signature": screen.dom_signature,
+                        "title": screen.title,
+                        "depth": screen.depth,
+                        "actions": screen.actions,
+                        "static": screen.static.__dict__ if screen.static else None,
+                        "runtime": screen.runtime.__dict__ if screen.runtime else None,
+                        "network": network_data,
+                        "storage": storage_data,
+                        "dom": {
+                            "stable_selectors": {k: v.to_dict() for k, v in screen.dom.stable_selectors.items()} if screen.dom else {},
+                            "input_targets": screen.dom.input_targets if screen.dom else [],
+                            "list_containers": screen.dom.list_containers if screen.dom else [],
+                            "action_buttons": screen.dom.action_buttons if screen.dom else [],
+                        } if screen.dom else None,
+                    }, indent=2, ensure_ascii=False))
 
             # Build dossier
             dossier = Dossier(
@@ -254,37 +243,16 @@ def _print_summary(dossier: Dossier, output_dir: Path) -> None:
     console.print(f"  - redaction-report.json")
     console.print(f"  - screens/ (per-screen details)")
 
-    # Screen table
-    table = Table(title="Screens Discovered")
-    table.add_column("Screen ID", style="cyan")
-    table.add_column("Title", style="white")
-    table.add_column("URL", style="blue")
-    table.add_column("Depth", style="yellow")
-    table.add_column("Actions", style="green")
-
+    # Screen list
+    console.print("\nScreens Discovered:")
     for screen in dossier.screens.values():
-        table.add_row(
-            screen.screen_id,
-            screen.title or "N/A",
-            screen.normalized_url[:60] + ("..." if len(screen.normalized_url) > 60 else ""),
-            str(screen.depth),
-            str(len(screen.actions)),
-        )
-    console.print(table)
+        console.print(f"  {screen.screen_id}: {screen.title or 'N/A'} (depth={screen.depth}, actions={len(screen.actions)})")
 
     # Network summary
     if dossier.aggregated_network.requests:
-        net_table = Table(title="Network Patterns")
-        net_table.add_column("Method", style="cyan")
-        net_table.add_column("URL Pattern", style="blue")
-        net_table.add_column("GraphQL", style="yellow")
+        console.print("\nNetwork Patterns:")
         for req in dossier.aggregated_network.requests[:20]:
-            net_table.add_row(
-                req.method,
-                req.url_pattern[:70],
-                "✓" if req.is_graphql else "",
-            )
-        console.print(net_table)
+            console.print(f"  {req.method} {req.url_pattern[:70]} {'(GraphQL)' if req.is_graphql else ''}")
 
 
 @cli.command()

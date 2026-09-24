@@ -138,7 +138,7 @@ class ProbeRunner:
             capabilities_tested=capabilities_tested,
         )
 
-    async _run_single_probe(
+    async def _run_single_probe(
         self,
         probe: dict,
         dossier: Dossier,
