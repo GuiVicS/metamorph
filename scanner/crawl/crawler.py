@@ -231,6 +231,13 @@ class Crawler:
             print(f"Detected login page at {url}, stopping crawl")
             return None
 
+        # Detect auth barriers (CAPTCHA, 2FA, email verification, etc.)
+        auth_barrier = await self._detect_auth_barrier(page)
+        if auth_barrier.get("hasCaptcha") or auth_barrier.get("has2FA") or auth_barrier.get("hasEmailVerification") or auth_barrier.get("hasPhoneVerification"):
+            print(f"Detected auth barrier at {url}: {auth_barrier}")
+            # Still create screen but mark auth barrier
+            pass
+
         # Generate screen ID and signatures
         normalized = URLNormalizer.normalize_url(url, self.base_domain)
         url_sig = URLNormalizer.url_signature(url, self.base_domain)
@@ -262,6 +269,7 @@ class Crawler:
             title=title,
             depth=depth,
             parent_screen_id=parent_id,
+            auth_barrier=auth_barrier if any(auth_barrier.get(k) for k in ["hasCaptcha", "has2FA", "hasEmailVerification", "hasPhoneVerification", "isLoginPage"]) else None,
         )
 
         # Set entry screen
@@ -305,8 +313,88 @@ class Crawler:
         () => {
             const hasPassword = document.querySelector('input[type="password"]') !== null;
             const hasLoginForm = document.querySelector('form[action*="login" i], form[id*="login" i], form[class*="login" i]') !== null;
-            const hasLoginText = /sign in|log in|login|entrar|acessar/i.test(document.body.innerText);
-            return hasPassword && (hasLoginForm || hasLoginText);
+            const hasLoginText = /sign in|log in|login|entrar|acessar|sign up|registrar/i.test(document.body.innerText);
+            const hasEmailInput = document.querySelector('input[type="email"]') !== null;
+            return (hasPassword && (hasLoginForm || hasLoginText)) || (hasEmailInput && hasPassword);
+        }
+        """
+        return await page.evaluate(script)
+
+    async def _detect_auth_barrier(self, page: Page) -> dict:
+        """Detect authentication barriers: login, CAPTCHA, 2FA, etc."""
+        script = """
+        () => {
+            const result = {
+                isLoginPage: false,
+                hasCaptcha: false,
+                has2FA: false,
+                hasEmailVerification: false,
+                hasPhoneVerification: false,
+                captchaTypes: [],
+                blockedSelectors: [],
+                pageText: document.body.innerText.slice(0, 5000)
+            };
+            
+            // Login page
+            const hasPassword = document.querySelector('input[type="password"]') !== null;
+            const hasLoginForm = document.querySelector('form[action*="login" i], form[id*="login" i], form[class*="login" i]') !== null;
+            const hasLoginText = /sign in|log in|login|entrar|acessar|sign up|registrar/i.test(document.body.innerText);
+            const hasEmailInput = document.querySelector('input[type="email"]') !== null;
+            result.isLoginPage = (hasPassword && (hasLoginForm || hasLoginText)) || (hasEmailInput && hasPassword);
+            
+            // CAPTCHA detection
+            const captchaSelectors = [
+                'iframe[src*="recaptcha"]',
+                'iframe[src*="hcaptcha"]',
+                'iframe[src*="captcha"]',
+                '.g-recaptcha',
+                '.h-captcha',
+                '#captcha',
+                '[data-captcha]',
+                'img[src*="captcha"]',
+                '.cf-turnstile',
+                '[data-sitekey]'
+            ];
+            for (const sel of captchaSelectors) {
+                if (document.querySelector(sel)) {
+                    result.hasCaptcha = true;
+                    result.captchaTypes.push(sel);
+                }
+            }
+            
+            // 2FA detection
+            const twoFAText = /two.?factor|2fa|two.?step|autentica.{0,3}.?dois.?fatores|verifica.{0,3}.?c.{0,3}digo|authenticator|google.?auth|microsoft.?auth|authy/i;
+            if (twoFAText.test(document.body.innerText)) {
+                result.has2FA = true;
+            }
+            const twoFAInputs = document.querySelectorAll('input[autocomplete="one-time-code"], input[name*="totp" i], input[name*="2fa" i], input[name*="code" i][maxlength="6"]');
+            if (twoFAInputs.length > 0) result.has2FA = true;
+            
+            // Email verification
+            const emailVerifyText = /verif.{0,3}.?email|confirm.{0,3}.?email|check.{0,3}.?inbox|confirma.{0,3}.?e.?mail/i;
+            if (emailVerifyText.test(document.body.innerText)) {
+                result.hasEmailVerification = true;
+            }
+            
+            // Phone verification
+            const phoneVerifyText = /verif.{0,3}.?phone|verif.{0,3}.?celular|confirm.{0,3}.?phone|sms.?code|c.{0,3}digo.?sms/i;
+            if (phoneVerifyText.test(document.body.innerText)) {
+                result.hasPhoneVerification = true;
+            }
+            
+            // Blocked/Access denied
+            const blockedText = /access denied|acesso negado|blocked|bloqueado|forbidden|proibido|rate limit|muitas tentativas|try again later|tente novamente/i;
+            if (blockedText.test(document.body.innerText)) {
+                result.blockedSelectors.push('page_text');
+            }
+            
+            // Cloudflare/Challenge pages
+            if (document.title.includes('Just a moment') || document.title.includes('Checking your browser') || document.querySelector('#challenge-running')) {
+                result.hasCaptcha = true;
+                result.captchaTypes.push('cloudflare_challenge');
+            }
+            
+            return result;
         }
         """
         return await page.evaluate(script)

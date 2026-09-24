@@ -163,6 +163,7 @@ class Screen:
     dom: DOMStructure | None = None
     probes: list[CapabilityProbeTrace] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    auth_barrier: dict | None = None  # Login, CAPTCHA, 2FA, etc.
 
 
 @dataclass

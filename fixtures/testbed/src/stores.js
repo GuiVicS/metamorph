@@ -307,7 +307,7 @@ const currentUserStore = new CurrentUserStore();
 const connectionStore = new ConnectionStore();
 const wsManager = new WebSocketManager();
 
-// Simulate webpack module registration
+// Expose on window IMMEDIATELY for scanner detection (before module async execution)
 window.webpackChunktestbed_app = window.webpackChunktestbed_app || [];
 window.webpackChunktestbed_app.push([
     ['stores'],
@@ -332,7 +332,7 @@ window.TestbedStores = {
     wsManager,
 };
 
-// Internal API functions (simulating same-origin fetch)
+// Expose API
 window.TestbedAPI = {
     async getConversations() {
         const channels = channelStore.getAllChannels();

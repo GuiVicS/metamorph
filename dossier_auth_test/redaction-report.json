@@ -1,0 +1,152 @@
+[
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[21]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[28]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[41]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[99]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[157]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[227]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[317]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[528]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[536]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[538]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[580]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[581]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.runtime.window_globals[699]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.nav_graph.nodes.scr_e84302dd.auth_barrier",
+    "reason": "secret field name: auth_barrier",
+    "original_type": "NoneType"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[21]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[28]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[41]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[99]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[157]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[227]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[317]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[528]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[536]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[538]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[580]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[581]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.runtime.window_globals[699]",
+    "reason": "token pattern: base64-long",
+    "original_type": "str"
+  },
+  {
+    "path": "$.screens.scr_e84302dd.auth_barrier",
+    "reason": "secret field name: auth_barrier",
+    "original_type": "NoneType"
+  },
+  {
+    "path": "$.aggregated_storage.local_storage_keys",
+    "reason": "secret field name: local_storage_keys",
+    "original_type": "dict"
+  },
+  {
+    "path": "$.aggregated_storage.session_storage_keys",
+    "reason": "secret field name: session_storage_keys",
+    "original_type": "dict"
+  }
+]
