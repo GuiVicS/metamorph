@@ -320,7 +320,7 @@ async def _run_probe(
 @click.option("--goals", required=True, help="Comma-separated capabilities to repair")
 @click.option("--profile", default="default", help="Browser profile name")
 @click.option("--prev", "previous_dossier", required=True, type=click.Path(exists=True, path_type=Path), help="Previous dossier.json for diff")
-@click.option("--out", "output_dir", default="./dossier", help="Output directory for new dossier")
+@click.option("--out", "output_dir", default="./dossier", type=click.Path(path_type=Path), help="Output directory for new dossier")
 @click.option("--headless/--no-headless", default=False, help="Run browser headless")
 def repair(url: str, goals: str, profile: str, previous_dossier: Path, output_dir: Path, headless: bool) -> None:
     """Repair a broken fingerprint by re-scanning with diff context."""
@@ -389,7 +389,7 @@ async def _run_repair(
             )
 
             # Compute diff
-            diff = compute_diff(prev.to_dict(), new_dossier.to_dict())
+            diff = compute_diff(prev, new_dossier)
             new_dossier.diff_from_previous = diff.to_dict()
 
             console.print(f"[cyan]Diff: {diff.summary}[/cyan]")

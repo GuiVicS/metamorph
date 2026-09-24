@@ -199,3 +199,11 @@ class DossierDiff:
         if self.removed:
             parts.append(f"{len(self.removed)} removed")
         self.summary = "; ".join(parts) if parts else "No changes"
+
+    def to_dict(self) -> dict:
+        return {
+            "changed": self.changed,
+            "added": self.added,
+            "removed": self.removed,
+            "summary": self.summary,
+        }
