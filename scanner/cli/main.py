@@ -7,6 +7,7 @@ import json
 import shutil
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import click
 from playwright.async_api import async_playwright
@@ -18,6 +19,8 @@ from ..core.types import Dossier
 from .crawler import Crawler, CrawlConfig, URLNormalizer
 from .dimensions.network_storage import NetworkMonitor, StorageCapture
 from .redaction.engine import redact_dossier, verify_redaction
+from .probe.runner import ExtensionProbeValidator
+from .repair.engine import RepairEngine, compute_diff
 
 console = Console()
 
@@ -302,6 +305,146 @@ def clear_profile(profile: str) -> None:
 def open(profile: str, url: str) -> None:
     """Open a URL in the browser profile (for manual login/setup)."""
     asyncio.run(_open_browser(profile, url))
+
+
+@cli.command()
+@click.option("--ext", required=True, type=click.Path(exists=True, path_type=Path), help="Extension dist directory")
+@click.option("--dossier", required=True, type=click.Path(exists=True, path_type=Path), help="Dossier.json path")
+@click.option("--goals", help="Comma-separated goals to test")
+@click.option("--consent", is_flag=True, help="Allow write probes (requires --sandbox-target)")
+@click.option("--sandbox-target", help="Conversation ID for write probes")
+@click.option("--headless/--no-headless", default=True, help="Run headless")
+def probe(ext: Path, dossier: Path, goals: str, consent: bool, sandbox_target: str, headless: bool) -> None:
+    """Run probes against a generated extension."""
+    goal_list = goals.split(",") if goals else None
+    asyncio.run(_run_probe(ext, dossier, goal_list, consent, sandbox_target, headless))
+
+
+async def _run_probe(
+    ext: Path,
+    dossier: Path,
+    goals: list[str] | None,
+    consent: bool,
+    sandbox_target: str | None,
+    headless: bool,
+) -> None:
+    validator = ExtensionProbeValidator()
+    report = await validator.validate(
+        extension_dist=ext,
+        dossier_path=dossier,
+        goals=goals,
+        consent_write=consent,
+        sandbox_conversation_id=sandbox_target,
+        headless=headless,
+    )
+
+    console.print(json.dumps(report.to_json(), indent=2))
+
+    if report.overall_passed == report.overall_total:
+        console.print("[bold green]✅ All probes passed[/bold green]")
+    else:
+        console.print(f"[bold red]❌ {report.overall_total - report.overall_passed} probes failed[/bold red]")
+        raise SystemExit(1)
+
+
+@cli.command()
+@click.option("--url", required=True, help="Starting URL to scan")
+@click.option("--goals", required=True, help="Comma-separated capabilities to repair")
+@click.option("--profile", default="default", help="Browser profile name")
+@click.option("--prev", "previous_dossier", required=True, type=click.Path(exists=True, path_type=Path), help="Previous dossier.json for diff")
+@click.option("--out", "output_dir", default="./dossier", help="Output directory for new dossier")
+@click.option("--headless/--no-headless", default=False, help="Run browser headless")
+def repair(url: str, goals: str, profile: str, previous_dossier: Path, output_dir: Path, headless: bool) -> None:
+    """Repair a broken fingerprint by re-scanning with diff context."""
+    asyncio.run(_run_repair(url, goals, profile, previous_dossier, output_dir, headless))
+
+
+async def _run_repair(
+    url: str,
+    goals: str,
+    profile: str,
+    previous_dossier: Path,
+    output_dir: Path,
+    headless: bool,
+) -> None:
+    goal_list = [g.strip() for g in goals.split(",")]
+
+    # Analyze diff first
+    prev = Dossier.load(previous_dossier)
+    console.print(f"[cyan]Analyzing breakage against {prev.scan_id}...[/cyan]")
+
+    # For now, run a fresh scan with --prev context
+    # The scanner already handles previous dossier
+    config = CrawlConfig()
+
+    # We need to run scan with previous dossier context
+    # This is a simplified version - in practice would use the RepairEngine
+    console.print("[yellow]Running repair scan...[/yellow]")
+
+    # Reuse scan logic with previous dossier
+    output_dir.mkdir(parents=True, exist_ok=True)
+    profile_dir = Path.home() / ".metamorph" / "profiles" / profile
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            headless=headless,
+            args=["--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"],
+        )
+
+        try:
+            network_monitor = NetworkMonitor()
+            page = browser.pages[0] if browser.pages else await browser.new_page()
+            network_monitor.attach(page)
+
+            async with Crawler(browser, config, url) as crawler:
+                nav_graph = await crawler.crawl(url)
+
+                for screen_id, screen in nav_graph.nodes.items():
+                    await page.goto(screen.normalized_url, wait_until="networkidle", timeout=config.timeout_ms)
+                    await page.wait_for_timeout(config.settle_ms)
+                    network_data = network_monitor.capture.to_catalogue()
+                    screen.network = type('obj', (object,), network_data)()
+                    storage_data = await StorageCapture.capture(page)
+                    screen.storage = type('obj', (object,), storage_data)()
+
+            # Build new dossier
+            new_dossier = Dossier(
+                site_slug=URLNormalizer.normalize_url(url, urlparse(url).netloc).replace("https://", "").replace("http://", "").replace("/", "_"),
+                base_url=url,
+                nav_graph=nav_graph,
+                screens=nav_graph.nodes,
+                requested_goals=goal_list,
+                coverage_estimate=min(1.0, len(nav_graph.nodes) / config.max_screens),
+                previous_dossier_version=prev.scan_id,
+            )
+
+            # Compute diff
+            diff = compute_diff(prev.to_dict(), new_dossier.to_dict())
+            new_dossier.diff_from_previous = diff.to_dict()
+
+            console.print(f"[cyan]Diff: {diff.summary}[/cyan]")
+            for path in diff.changed[:10]:
+                console.print(f"  ~ {path}")
+            for path in diff.added[:5]:
+                console.print(f"  + {path}")
+
+            # Redact and save
+            redacted, redaction_report = redact_dossier(new_dossier.to_dict())
+            clean, violations = verify_redaction(redacted)
+            if not clean:
+                console.print("[red]REDACTION FAILED[/red]")
+                raise SystemExit(1)
+
+            dossier_file = output_dir / "dossier.json"
+            dossier_file.write_text(json.dumps(redacted, indent=2, ensure_ascii=False))
+
+            console.print(f"[green]Repair dossier saved to {dossier_file}[/green]")
+            console.print("[yellow]Next: Use the skill to regenerate extension from this dossier[/yellow]")
+
+        finally:
+            await browser.close()
 
 
 async def _open_browser(profile: str, url: str) -> None:

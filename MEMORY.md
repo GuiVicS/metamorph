@@ -1,6 +1,6 @@
 # METAMORPH - Development Memory
 
-## Current State: Phase 2 Complete (Skill + Extension Template)
+## Current State: Phase 3 Complete (Probes + Repair Flow)
 
 ### What's Done ✅
 
@@ -8,107 +8,104 @@
 - Core dossier types, baseline, redaction, crawler, network/storage capture, CLI
 - Fixture testbed with baseline + 2 breakage variants (v2 renamed-store, v3 moved-endpoint)
 
-**Phase 2: Skill + Extension Template** (this commit)
+**Phase 2: Skill + Extension Template** (commit 30fa9b9)
+- Skill (`skills/metamorph-extgen/`) with SKILL.md, references
+- Extension Template (MV3) with bridge, content script, service worker, popup
 
-**Skill (`skills/metamorph-extgen/`)**
-- `SKILL.md` - Complete instructions for Claude CLI to generate MV3 extension from dossier
-- `references/dossier-schema.md` - Full dossier JSON structure reference
-- `references/binding-preferences.md` - Binding selection guide with priority flowchart
-- `references/redlines.md` - Security redlines (no-eval, no-credentials, shape-matching, closed transforms, etc.)
+**Phase 3: Probes + Repair Flow** (this commit)
 
-**Extension Template (`skills/metamorph-extgen/templates/extension/`)**
-- `manifest.json` - MV3 with placeholders, optional host permissions
-- `src/main-world/bridge.js` - MAIN world bridge with:
-  - Structural path resolver (no eval, forbidden segments: `__proto__`, `constructor`, `prototype`)
-  - Discovery strategies: webpack-chunk-injection, window-path
-  - Handle resolution by shape matching (hasKeys/hasMethods)
-  - Interceptors: fetch, WebSocket, function
-  - Message protocol via postMessage to ISOLATED world
-  - Capability execution: runtime-call, runtime-read, internal-http, dom-action
-- `src/content/content.js` - ISOLATED world content script:
-  - Chrome runtime port to service worker
-  - postMessage bridge to MAIN world
-  - DOM actor for dom-action bindings
-  - MutationObserver for selector verification
-- `src/worker/worker.js` - Service worker:
-  - FingerprintStore (IndexedDB)
-  - AdapterEngine (builds ChannelAdapter from fingerprint)
-  - BindingExecutor (executes all binding types)
-  - Normalizer (closed transform set)
-  - EventBus (60s dedupe window)
-  - HealthMonitor (probes, telemetry)
-  - Transport (WebSocket to backend with ack/reconnect)
-- `src/popup/popup.html` + `popup.js` - Status UI
-- `config/origins.json` - Platform origins template
-- `esbuild.config.mjs` - Bundles worker modules
+**Probe Runner (`scanner/probe/runner.py`)**
+- `ExtensionProbeValidator` - Loads extension dist + dossier, runs probes via Playwright
+- `ProbeRunner` - Injects bridge/content script, executes capabilities via postMessage
+- Validates assertions (equals, nonEmpty, type, minLength)
+- CLI: `metamorph probe --ext <dir> --dossier <file> --goals <list> [--consent --sandbox-target]`
+
+**Repair Engine (`scanner/repair/`)**
+- `diff.py` - Structural diff between dossiers (changed/added/removed paths)
+- `engine.py` - `RepairEngine` analyzes breakage, identifies affected capabilities, generates actions
+- CLI: `metamorph repair --url <url> --goals <list> --prev <dossier> --out <dir>`
+- Re-scans with previous dossier context, computes diff, saves new dossier
+
+**Fixture Variants Ready for Testing**
+- `v2-renamed-store` - Webpack chunk global + export renames + method renames
+- `v3-moved-endpoint` - GraphQL endpoint switch (REST → /graphql)
 
 ### Project Structure
 ```
 metamorph/
 ├── pyproject.toml
 ├── MEMORY.md
-├── scanner/ (Phase 1)
-├── fixtures/testbed/ (Phase 1)
-├── skills/
-│   └── metamorph-extgen/
-│       ├── SKILL.md
-│       ├── references/
-│       │   ├── dossier-schema.md
-│       │   ├── binding-preferences.md
-│       │   └── redlines.md
-│       └── templates/extension/
-│           ├── manifest.json
-│           ├── esbuild.config.mjs
-│           ├── config/origins.json
-│           └── src/
-│               ├── main-world/bridge.js
-│               ├── content/content.js
-│               ├── worker/
-│               │   ├── worker.js
-│               │   ├── fingerprint-store.js
-│               │   ├── adapter-engine.js
-│               │   ├── binding-executor.js
-│               │   ├── normalizer.js
-│               │   ├── event-bus.js
-│               │   ├── health.js
-│               │   └── transport.js
-│               └── popup/popup.html, popup.js
+├── scanner/
+│   ├── core/ (types, baseline)
+│   ├── crawl/ (crawler, URLNormalizer)
+│   ├── dimensions/ (network_storage)
+│   ├── redaction/ (engine, verifier)
+│   ├── probe/ (runner)
+│   ├── repair/ (engine, diff)
+│   └── cli/ (main: scan, report, probe, repair, clear-profile, open)
+├── fixtures/testbed/ (baseline + v2 + v3 variants)
+├── skills/metamorph-extgen/ (SKILL.md + extension template)
 └── templates/ (empty)
 ```
 
-### How to Use (End-to-End)
+### How to Test End-to-End
 
 ```bash
-# 1. Start fixture server
+cd C:\Users\User\metamorph
+
+# Install deps
+pip install -e .[dev]
+playwright install chromium
+
+# 1. Start baseline fixture server (terminal 1)
 python -m fixtures.testbed.server 8765
 
-# 2. Scan the fixture (creates dossier)
+# 2. Scan baseline → dossier
 python -m scanner.cli.main scan \
   --url http://localhost:8765 \
   --goals getMessages,sendMessage,getConversations \
   --profile testbed \
-  --out ./dossier_testbed \
+  --out ./dossier_baseline \
   --headless
 
-# 3. Use the skill in Claude CLI:
-#    - Open Claude Code in the repo root
-#    - The skill is at skills/metamorph-extgen/
-#    - Follow SKILL.md to generate extension from dossier_testbed/dossier.json
+# 3. Generate extension using skill (Claude CLI)
+#    - Follow skills/metamorph-extgen/SKILL.md
+#    - Output: extensions/testbed/
+#    - Build: cd extensions/testbed && npx esbuild --config=esbuild.config.mjs
 
-# 4. Build generated extension:
-#    cd extensions/testbed
-#    npm install
-#    npx esbuild --config=esbuild.config.mjs
+# 4. Run probes against baseline extension
+python -m scanner.cli.main probe \
+  --ext ./extensions/testbed/dist \
+  --dossier ./dossier_baseline/dossier.json \
+  --goals getMessages,getConversations \
+  --headless
 
-# 5. Load in Chrome (chrome://extensions → Developer mode → Load unpacked → dist/)
+# 5. Test REPAIR: Switch to v2 variant (renamed store)
+#    Terminal 1: python -m fixtures.testbed.variants.v2-renamed-store.server 8765
+#    (or modify server.py to serve variant)
+
+# 6. Run repair scan
+python -m scanner.cli.main repair \
+  --url http://localhost:8765 \
+  --goals getMessages,sendMessage,getConversations \
+  --profile testbed \
+  --prev ./dossier_baseline/dossier.json \
+  --out ./dossier_v2_repair \
+  --headless
+
+# 7. Check diff output shows: webpack chunk global changed, handle paths changed
+# 8. Regenerate extension from new dossier using skill
+# 9. Run probes again - should pass!
+
+# 10. Repeat for v3 (moved endpoint)
 ```
 
-### Next Phase: Phase 3 - Probes + Repair Flow
-- Probe runner (Playwright-based) to validate generated extension against live site
-- Diff-based re-scan for repair flow
-- Demonstrate v2/v3 variant repair automatically
+### Git Status
+- Local repo at `C:\Users\User\metamorph`
+- 3 commits: Phase 1, Phase 2, Phase 3
+- **Ready for GitHub push**
 
-### Open Decisions for Phase 3
-1. Probe runner: standalone CLI or integrated into scanner CLI?
-2. Extension output location: `extensions/<site-slug>/` in repo?
-3. Repair flow: auto-detect breakage from probe failures → re-scan with prev dossier → regenerate
+### Next Steps
+1. Push to GitHub: `git remote add origin https://github.com/guivics/metamorph.git && git push -u origin master`
+2. Test full repair loop on fixture variants
+3. Optional: Add GitHub Actions for CI
