@@ -1,0 +1,6 @@
+{
+  "platform": "__PLATFORM_SLUG__",
+  "displayName": "__PLATFORM_DISPLAY_NAME__",
+  "origins": __ORIGINS__,
+  "matchPatterns": __MATCH_PATTERNS__
+}

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "__EXTENSION_NAME__",
+  "version": "1.0.0",
+  "description": "__EXTENSION_DESCRIPTION__",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "scripting", "alarms"],
+  "optional_host_permissions": __OPTIONAL_HOST_PERMISSIONS__,
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "content_scripts": [{
+    "matches": __CONTENT_SCRIPT_MATCHES__,
+    "js": ["content.js"],
+    "run_at": "document_start",
+    "all_frames": false
+  }],
+  "web_accessible_resources": [{
+    "resources": ["bridge.js"],
+    "matches": __BRIDGE_MATCHES__
+  }],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "__EXTENSION_NAME__"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
+}
